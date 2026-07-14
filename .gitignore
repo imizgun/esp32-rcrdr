@@ -1,0 +1,12 @@
+# ESP-IDF build output
+build/
+
+# Auto-generated backup of sdkconfig (created on every reconfigure)
+sdkconfig.old
+
+# Managed component manager downloads/lockfile
+managed_components/
+dependencies.lock
+
+# Editor / tooling caches
+.cache/

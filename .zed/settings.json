@@ -1,0 +1,14 @@
+{
+  "lsp": {
+    "clangd": {
+      "binary": {
+        "path": "clangd",
+        "arguments": [
+          "--query-driver=/home/mikhail/.espressif/tools/**/bin/*-elf-*",
+          "--background-index",
+          "--clang-tidy"
+        ]
+      }
+    }
+  }
+}

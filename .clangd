@@ -1,0 +1,14 @@
+CompileFlags:
+  CompilationDatabase: build
+  Remove:
+    - -mlongcalls
+    - -mno-target-align
+    - -fstrict-volatile-bitfields
+    - -fno-tree-switch-conversion
+    - -fno-shrink-wrap
+    - -Werror
+    - -specs=*
+  Add:
+    - -isystem/home/mikhail/.espressif/tools/xtensa-esp-elf/esp-15.2.0_20251204/xtensa-esp-elf/picolibc/include
+Diagnostics:
+  UnusedIncludes: None
