@@ -10,3 +10,5 @@ dependencies.lock
 
 # Editor / tooling caches
 .cache/
+
+.zed/
