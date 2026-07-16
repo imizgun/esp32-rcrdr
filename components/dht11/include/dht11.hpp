@@ -7,6 +7,15 @@ struct Dht11State {
     float temperature;
     float humidity;
     bool is_ok;
+
+    void ass() {};
+
+    bool operator== (Dht11State other) {
+        if (is_ok == other.is_ok && temperature == other.temperature && humidity == other.humidity) {
+            return true;
+        }
+        return false;
+    }
 };
 
 class Dht11Reader {

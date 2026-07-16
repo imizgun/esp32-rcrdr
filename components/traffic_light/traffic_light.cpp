@@ -1,5 +1,9 @@
 #include "traffic_light.hpp"
 
+// #define RED GPIO_NUM_17
+// #define YELLOW GPIO_NUM_5
+// #define GREEN GPIO_NUM_18
+// 
 TrafficLight::TrafficLight() {
   _state = TrafficLightState::ChangingState;
 }
@@ -26,3 +30,38 @@ int TrafficLight::getStateTime() const {
   }
   return 0;
 }
+
+// TrafficLight light = TrafficLight();
+
+// gpio_reset_pin(RED);
+// gpio_set_direction(RED, GPIO_MODE_OUTPUT);
+// gpio_reset_pin(YELLOW);
+// gpio_set_direction(YELLOW, GPIO_MODE_OUTPUT);
+// gpio_reset_pin(GREEN);
+// gpio_set_direction(GREEN, GPIO_MODE_OUTPUT);
+
+// while (1) {
+//     switch (light.getState()) {
+//         case TrafficLightState::ChangingState:
+//             gpio_set_level(RED, 1);
+//             gpio_set_level(YELLOW, 1);
+//             break;
+//         case TrafficLightState::Allowed:
+//             gpio_set_level(RED, 0);
+//             gpio_set_level(YELLOW, 0);
+//             gpio_set_level(GREEN, 1);
+//             break;
+//         case TrafficLightState::BeReadyToStop:        
+//             gpio_set_level(YELLOW, 1);
+//             gpio_set_level(GREEN, 0);
+//             break;
+//         case TrafficLightState::Forbidden:
+//             gpio_set_level(RED, 1);
+//             gpio_set_level(GREEN, 0);
+//             gpio_set_level(YELLOW, 0);
+//             break;
+//     }
+//     vTaskDelay(light.getStateTime() / portTICK_PERIOD_MS);
+//     light.update();
+// }
+// 

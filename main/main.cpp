@@ -1,59 +1,47 @@
+#include <cstdio>
+#include <cstring>
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/gpio.h"
 #include "dht11.hpp"
+#include "lcd1602/lcd1602.h"
+#include "driver/i2c_master.h"
 
 #define DATA GPIO_NUM_19
-
-// #define RED GPIO_NUM_17
-// #define YELLOW GPIO_NUM_5
-// #define GREEN GPIO_NUM_18
+#define LCD_I2C_ADDR 0x27
 
 extern "C" void app_main(void)
 {
-    // TrafficLight light = TrafficLight();
-    
-    // gpio_reset_pin(RED);
-    // gpio_set_direction(RED, GPIO_MODE_OUTPUT);
-    // gpio_reset_pin(YELLOW);
-    // gpio_set_direction(YELLOW, GPIO_MODE_OUTPUT);
-    // gpio_reset_pin(GREEN);
-    // gpio_set_direction(GREEN, GPIO_MODE_OUTPUT);
-
-    // while (1) {
-    //     switch (light.getState()) {
-    //         case TrafficLightState::ChangingState:
-    //             gpio_set_level(RED, 1);
-    //             gpio_set_level(YELLOW, 1);
-    //             break;
-    //         case TrafficLightState::Allowed:
-    //             gpio_set_level(RED, 0);
-    //             gpio_set_level(YELLOW, 0);
-    //             gpio_set_level(GREEN, 1);
-    //             break;
-    //         case TrafficLightState::BeReadyToStop:        
-    //             gpio_set_level(YELLOW, 1);
-    //             gpio_set_level(GREEN, 0);
-    //             break;
-    //         case TrafficLightState::Forbidden:
-    //             gpio_set_level(RED, 1);
-    //             gpio_set_level(GREEN, 0);
-    //             gpio_set_level(YELLOW, 0);
-    //             break;
-    //     }
-    //     vTaskDelay(light.getStateTime() / portTICK_PERIOD_MS);
-    //     light.update();
-    // }
-    // 
-
     Dht11Reader reader(DATA);
+
+    i2c_lowlevel_config config = {0, I2C_NUM_0, GPIO_NUM_22, GPIO_NUM_23};
+    lcd1602_context lcd = lcd1602_init(LCD_I2C_ADDR, true, &config);
+    if (!lcd) {
+        printf("lcd init failed\n");
+    }
+
+    Dht11State lastState = {0, 0, false};
 
     while (1) {
         Dht11State state = reader.read();
 
         if (state.is_ok) {
             printf("temperature: %.1f, humidity: %.1f\n", state.temperature, state.humidity);
+            if (lcd && state != lastState) {
+                char line1[17];
+                char line2[17];
+                snprintf(line1, sizeof(line1), "T: %.1fC", state.temperature);
+                snprintf(line2, sizeof(line2), "H: %.1f%%", state.humidity);
+
+                lcd1602_clear(lcd);
+                lcd1602_set_cursor(lcd, 0, 0);
+                lcd1602_string(lcd, line1);
+                lcd1602_set_cursor(lcd, 1, 0);
+                lcd1602_string(lcd, line2);
+
+                lastState = state;
+            }
         } else {
             printf("read failed\n");
         }
