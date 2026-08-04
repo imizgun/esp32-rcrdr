@@ -13,12 +13,10 @@ Microphone::Microphone(gpio_num_t workingIndicator, gpio_num_t serialDataPin, gp
 
 void Microphone::init() {
 	gpio_reset_pin(this->_workingIndicator);
-	gpio_set_direction(this->_workingIndicator, GPIO_MODE_OUTPUT);
-	_toggle_indicator();
+	gpio_set_direction(this->_workingIndicator, GPIO_MODE_INPUT_OUTPUT);
 }
 
 void Microphone::start_record() {
-	gpio_reset_pin(this->_workingIndicator);
 	_toggle_indicator();
 }
 

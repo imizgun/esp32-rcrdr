@@ -8,8 +8,8 @@
 #include "recorder.hpp"
 #include "soc/gpio_num.h"
 
-#define MIC_INDC_PIN GPIO_NUM_34
-#define RECORD_BUTTON_PIN GPIO_NUM_16
+#define MIC_INDC_PIN GPIO_NUM_26
+#define RECORD_BUTTON_PIN GPIO_NUM_25
 
 extern "C" void app_main(void)
 {
@@ -18,11 +18,12 @@ extern "C" void app_main(void)
 		GPIO_NUM_0, 
 		GPIO_NUM_0, 
 		GPIO_NUM_0);
+	mic.init();
 
 	Recorder rec = Recorder(&mic, RECORD_BUTTON_PIN);
 	rec.init();
     
     while (1) {
-    	
+    	vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
