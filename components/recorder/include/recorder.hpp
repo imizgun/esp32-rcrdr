@@ -4,6 +4,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "driver/i2s_std.h"
 
 #define DEBOUNCE_SETTLE_MS 30
 

@@ -3,6 +3,7 @@
 #include "esp_err.h"
 #include <cstdio>
 #include "recorder.hpp"
+#include "driver/i2s_std.h"
 
 Recorder::Recorder(Microphone* microphone, gpio_num_t button_pin) {
 	this->_microphone = microphone;

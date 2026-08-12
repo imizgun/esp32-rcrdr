@@ -14,10 +14,10 @@
 extern "C" void app_main(void)
 {
 	Microphone mic = Microphone(MIC_INDC_PIN, 
-		GPIO_NUM_0, 
-		GPIO_NUM_0, 
-		GPIO_NUM_0, 
-		GPIO_NUM_0);
+                          		GPIO_NUM_18, 
+                          		GPIO_NUM_16, 
+                          		GPIO_NUM_4, 
+                          		GPIO_NUM_17);
 	mic.init();
 
 	Recorder rec = Recorder(&mic, RECORD_BUTTON_PIN);
