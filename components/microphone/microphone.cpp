@@ -3,6 +3,7 @@
 #include "driver/i2s_common.h"
 #include "driver/i2s_std.h"
 #include "esp_intr_alloc.h"
+#include "freertos/idf_additions.h"
 #include "hal/gpio_types.h"
 #include "freertos/FreeRTOS.h"
 #include "esp_err.h"
@@ -42,6 +43,11 @@ void Microphone::init() {
         }
     };
 
+    // TODO(you): 100 байт = 50 сэмплов int16 — почти наверняка мало с запасом
+    // на просадки при записи на SD. Пересчитать под реальный размер чанка,
+    // который читает _readLoop (сейчас 256 сэмплов = 512 байт за одно чтение).
+    this->read_data = xStreamBufferCreate(512, 512);
+
     err = i2s_channel_init_std_mode(this->_rx_chan, &std_cfg);
     printf("i2s_channel_init_std_mode: %s\n", esp_err_to_name(err));
 }
@@ -61,6 +67,11 @@ void Microphone::stop_record() {
 }
 
 size_t Microphone::read(int16_t* buffer, size_t max_samples) {
+	size_t bytes_read = xStreamBufferReceive(this->read_data, buffer, max_samples * sizeof(int16_t), pdMS_TO_TICKS(100));
+	return bytes_read / sizeof(int16_t);
+}
+
+size_t Microphone::_readFromI2S(int16_t* buffer, size_t max_samples) {
 	size_t bytes_read = 0;
 	i2s_channel_read(this->_rx_chan, buffer, max_samples * sizeof(int16_t), &bytes_read, pdMS_TO_TICKS(100));
 	return bytes_read / sizeof(int16_t);
@@ -78,9 +89,19 @@ void Microphone::readTaskEntry(void* arg) {
 void Microphone::_readLoop() {
 	int16_t buffer[256];
 	while (_recording) {
-		size_t res = this->read(buffer, 256);
-
-		printf("read: %zu/%d\n", res, 256);
+		size_t res = this->_readFromI2S(buffer, 256);
+		if (res == 0) {
+			continue;
+		}
+		// TODO(you): xStreamBufferSend с таймаутом молча дропнет сэмплы, если
+		// Recorder не успевает вычитывать буфер (SD подтормозила на записи).
+		// Реши сознательно: дропать (как сейчас), увеличивать таймаут,
+		// или как-то сигнализировать о переполнении наружу.
+		xStreamBufferSend(this->read_data, buffer, res * sizeof(int16_t), pdMS_TO_TICKS(100));
 	}
 	vTaskDelete(NULL);
+}
+
+bool Microphone::is_recording() {
+	return _recording;
 }

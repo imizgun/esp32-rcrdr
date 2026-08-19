@@ -12,3 +12,5 @@ dependencies.lock
 .cache/
 
 .zed/
+
+.direnv
