@@ -1,4 +1,5 @@
 #include "driver/gpio.h"
+#include "freertos/idf_additions.h"
 #include "hal/gpio_types.h"
 #include "esp_err.h"
 #include <cstdio>
@@ -7,7 +8,6 @@
 #include "recorder.hpp"
 #include "driver/i2s_std.h"
 
-// must match the I2S config set up in Microphone::init()
 #define RECORDING_SAMPLE_RATE 44100
 #define RECORDING_BITS_PER_SAMPLE 16
 #define RECORDING_CHANNELS 1
@@ -72,25 +72,22 @@ void Recorder::onInterrupt() {
 }
 
 void Recorder::startRecording() {
-    char rec_count_c[3];
-    char record[] = "record_";
-    char* fileName = strcat(strcat(record, itoa(this->_recording_count, rec_count_c, 10)), ".wav");
-    
-	// TODO(you): _memory->startFile(filename, RECORDING_SAMPLE_RATE,
-	// RECORDING_BITS_PER_SAMPLE, RECORDING_CHANNELS) — параметры должны совпадать
-	// с тем, что реально настроено в Microphone::init() (I2S_STD_CLK_DEFAULT_CONFIG
-	// и слот-конфиг). Провалидировать результат перед тем как продолжать.
+    char fileName[32];
+    snprintf(fileName, sizeof(fileName), "record_%d.wav", this->_recording_count);
 
 	_microphone->start_record();
 	_isRecording = true;
-	_memory->startFile(fileName, 44100, 16, 1);
+	bool started = _memory->startFile(fileName, RECORDING_SAMPLE_RATE, RECORDING_BITS_PER_SAMPLE, RECORDING_CHANNELS);
+
+	if (!started) {
+	    printf("Bad file writing start\n");
+		return;
+	}
 
 	xTaskCreate(&Recorder::pumpTaskEntry, "recorder_pump", 4096, this, 5, &_pump_task_handle);
 }
 
 void Recorder::stopRecording() {
-	// Просто сигнализируем насосу остановиться — сам файл закрывает pumpLoop(),
-	// чтобы не было гонки между fclose() отсюда и ещё не дописанными данными там.
 	_isRecording = false;
 	_microphone->stop_record();
 }
@@ -99,16 +96,38 @@ void Recorder::pumpTaskEntry(void* arg) {
 	static_cast<Recorder*>(arg)->pumpLoop();
 }
 
-// TODO(you): основной алгоритм передачи звука на SD.
-//   1. Завести локальный буфер int16_t buffer[N] на стеке. Выбор N — компромисс
-//      между тем, как часто дёргаем fwrite (см. Memory::writeSamples) и
-//      размером стека задачи (сейчас стек 4096 байт в xTaskCreate выше).
-//   2. Пока _isRecording (или пока _microphone->is_recording(), подумай какое
-//      условие правильнее) — читать: size_t n = _microphone->read(buffer, N);
-//      если n > 0, писать: _memory->writeSamples(buffer, n).
-//   3. После выхода из цикла — доп. чтение "на добор" остатка из буфера
-//      микрофона (иначе последние сэмплы, прочитанные _readLoop до остановки,
-//      потеряются), затем _memory->stopFile().
-//   4. vTaskDelete(NULL) в конце, обнулить _pump_task_handle.
 void Recorder::pumpLoop() {
+    this->_recording_count++;
+    
+    const size_t N = 256;
+    int16_t buffer[N];
+    
+    while (_isRecording) {
+        bool res = pump(buffer, N);
+
+        if (!res) return;
+    }
+    
+    pump(buffer, N);
+    _memory->stopFile();
+    
+    _pump_task_handle = nullptr;
+    vTaskDelete(NULL);
+}
+
+
+bool Recorder::pump(int16_t* buffer, size_t n) { 
+    size_t read = _microphone->read(buffer, n);
+
+    if (read > 0) {
+        _memory->writeSamples(buffer, read);
+        if (_memory->isWritingFailed()) {
+            _isRecording = false;
+            _memory->stopFile();
+            _pump_task_handle = nullptr;
+            vTaskDelete(NULL);
+            return false;
+        }
+    }
+    return true;
 }

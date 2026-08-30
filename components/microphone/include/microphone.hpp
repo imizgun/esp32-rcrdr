@@ -11,8 +11,6 @@ class Microphone {
 		void init();
 		void start_record();
 		void stop_record();
-		// Забирает то, что успел накопить _readLoop в read_data. Это единственная
-		// точка доступа к аудиопотоку снаружи класса.
 		size_t read(int16_t* buffer, size_t max_samples);
 		bool is_recording();
 
@@ -25,15 +23,10 @@ class Microphone {
 		gpio_num_t _leftRightPin;
 		gpio_num_t _wordSelectPin;
 		i2s_chan_handle_t _rx_chan;
-		// Единственный буфер между продюсером (_readLoop, читает I2S) и
-		// потребителем (read(), вызывается снаружи). Размер задан в init() —
-		// TODO(you): пересчитать под реальный размер чанка/частоту записи на SD.
 		StreamBufferHandle_t read_data;
 
 		void _toggle_indicator();
 		static void readTaskEntry(void* arg);
 		void _readLoop();
-		// Прямое чтение из I2S. Вызывать может только _readLoop — это и есть
-		// тот самый единственный читатель хардварного канала.
 		size_t _readFromI2S(int16_t* buffer, size_t max_samples);
 };

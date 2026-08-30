@@ -22,10 +22,9 @@ class Recorder {
 		Microphone* _microphone;
 		Memory* _memory;
 		gpio_num_t _button_pin;
-		bool _isRecording;
+		volatile bool _isRecording;
 		int _recording_count;
 		TaskHandle_t _task_handle;
-		// Задача-насос: читает из _microphone->read(), пишет в _memory->writeSamples().
 		TaskHandle_t _pump_task_handle;
 
 		static void IRAM_ATTR isr_handler(void* arg);
@@ -36,4 +35,5 @@ class Recorder {
 
 		static void pumpTaskEntry(void* arg);
 		void pumpLoop();
+		bool pump(int16_t* buffer, size_t n);
 };

@@ -19,42 +19,49 @@ Memory::Memory(gpio_num_t cs, gpio_num_t clk, gpio_num_t mosi, gpio_num_t miso) 
     this->_card = nullptr;
     this->_file = nullptr;
     this->_data_bytes = 0;
+    this->_writingFailed = false;
 }
 
 bool Memory::init() {
-    spi_bus_config_t config = {
-        .mosi_io_num = mosi_pin, 
-        .miso_io_num = miso_pin,
-        .sclk_io_num = clock_pin,
-        .max_transfer_sz = 512,
-    };
+    spi_bus_config_t config = {};
+    config.mosi_io_num = mosi_pin;
+    config.miso_io_num = miso_pin;
+    config.sclk_io_num = clock_pin;
+    config.max_transfer_sz = 512;
 
-    spi_bus_initialize(SPI2_HOST, &config, this->mosi_pin);
+    esp_err_t err = spi_bus_initialize(SPI2_HOST, &config, SPI_DMA_CH_AUTO);
+    printf("spi_bus_initialize: %s\n", esp_err_to_name(err));
+    if (err != ESP_OK) {
+        return false;
+    }
 
     sdmmc_host_t host = SDSPI_HOST_DEFAULT();
     host.slot = SPI2_HOST;
+    host.max_freq_khz = 4000;
 
     sdspi_device_config_t slot_cfg = SDSPI_DEVICE_CONFIG_DEFAULT();
     slot_cfg.gpio_cs = this->chip_select_pin;
     slot_cfg.host_id = SPI2_HOST;
 
     esp_vfs_fat_mount_config_t mount_conf = {
-        .format_if_mount_failed = true,
+        .format_if_mount_failed = false,
         .max_files = 1,
         .allocation_unit_size = 512,
         .disk_status_check_enable = true,
         .use_one_fat = true
     };
 
-    esp_vfs_fat_sdmmc_mount(BASE_PATH, &host, &slot_cfg, &mount_conf, &_card);
+    err = esp_vfs_fat_sdspi_mount(BASE_PATH, &host, &slot_cfg, &mount_conf, &_card);
+    printf("esp_vfs_fat_sdspi_mount: %s\n", esp_err_to_name(err));
 
-    
-    return false;
+    return err == ESP_OK;
 }
 
 bool Memory::startFile(const char* filename, uint32_t sample_rate, uint16_t bits_per_sample, uint16_t channels) {
-    char slash[] = "/";
-    char* fullPath = strcat(BASE_PATH, strcat(slash, filename));
+    this->_writingFailed = false;
+    
+    char fullPath[64];
+    snprintf(fullPath, sizeof(fullPath), "%s/%s", BASE_PATH, filename);
 
     _file = fopen(fullPath, "wb");
 
@@ -67,50 +74,60 @@ bool Memory::startFile(const char* filename, uint32_t sample_rate, uint16_t bits
     _channels = channels;
     _data_bytes = 0;
 
-    WavHeader header;
-
+    WavHeader header = _buildHeader();
     fwrite(&header, sizeof(WavHeader), 1, _file);
-    
+
     return true;
 }
 
-void Memory::writeSamples(const int16_t* data, size_t count) {
-    // TODO(you):
-    //   1. fwrite(data, sizeof(int16_t), count, _file).
-    //   2. _data_bytes += count * sizeof(int16_t).
-    // Подумай, что делать, если fwrite записал меньше, чем count (SD отвалилась
-    // на записи) — молча игнорировать некорректно.
+WavHeader Memory::_buildHeader() {
+    WavHeader header;
+    memcpy(header.riff_tag, "RIFF", 4);
+    memcpy(header.wave_tag, "WAVE", 4);
+    memcpy(header.fmt_tag, "fmt ", 4);
+    header.fmt_size = 16;
+    header.audio_format = 1; // PCM
+    header.num_channels = _channels;
+    header.sample_rate = _sample_rate;
+    header.byte_rate = _sample_rate * _channels * _bits_per_sample / 8;
+    header.block_align = _channels * _bits_per_sample / 8;
+    header.bits_per_sample = _bits_per_sample;
+    memcpy(header.data_tag, "data", 4);
+    header.chunk_size = 36 + _data_bytes;
+    header.data_size = _data_bytes;
+    return header;
+}
 
+void Memory::writeSamples(const int16_t* data, size_t count) {
     size_t wrote = fwrite(data, sizeof(int16_t), count, _file);
 
-    if (wrote < sizeof(data)) {
-        ...
+    if (wrote < count) {
+        size_t wrote_remain_count = count - wrote;
+        const int16_t* remain_data = data + wrote;
+        size_t repeated_wrote = fwrite(remain_data, sizeof(int16_t), wrote_remain_count, _file);
+        
+        if (repeated_wrote < wrote_remain_count) {
+            this->_writingFailed = true;
+            this->_data_bytes += (wrote + repeated_wrote) * sizeof(int16_t);
+            return;
+        }
     }
     
-    this->_data_bytes += count * sizeof(int16_t);
+    this->_data_bytes += wrote * sizeof(int16_t);
+}
+
+bool Memory::isWritingFailed() {
+    return this->_writingFailed;
 }
 
 void Memory::stopFile() {
-    // TODO(you):
-    //   1. Если _file == nullptr — нечего закрывать, выйти.
-    //   2. Собрать финальный WavHeader: chunk_size = 36 + _data_bytes,
-    //      data_size = _data_bytes, byte_rate/block_align посчитать из
-    //      _sample_rate/_bits_per_sample/_channels.
-    //   3. fseek(_file, 0, SEEK_SET), fwrite(&header, sizeof(header), 1, _file) —
-    //      перезаписать заглушку из startFile() реальными значениями.
-    //   4. fclose(_file); _file = nullptr.
-    
     if (_file == nullptr) return;
 
-    // уточнить по поводу byte_rate и block_align 
-    WavHeader header;
-    header.chunk_size = 36 + _data_bytes;
-    header.data_size = _data_bytes;
-    header.byte_rate = _sample_rate * _channels * _bits_per_sample / 8;
-    header.block_align = _channels * _bits_per_sample / 8;
-    
+    WavHeader header = _buildHeader();
+
     fseek(_file, 0, SEEK_SET);
     fwrite(&header, sizeof(header), 1, _file);
     fclose(_file);
+
     _file = nullptr;
 }

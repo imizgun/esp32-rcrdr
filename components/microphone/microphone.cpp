@@ -43,10 +43,7 @@ void Microphone::init() {
         }
     };
 
-    // TODO(you): 100 байт = 50 сэмплов int16 — почти наверняка мало с запасом
-    // на просадки при записи на SD. Пересчитать под реальный размер чанка,
-    // который читает _readLoop (сейчас 256 сэмплов = 512 байт за одно чтение).
-    this->read_data = xStreamBufferCreate(512, 512);
+    this->read_data = xStreamBufferCreate(8820, 1);
 
     err = i2s_channel_init_std_mode(this->_rx_chan, &std_cfg);
     printf("i2s_channel_init_std_mode: %s\n", esp_err_to_name(err));
@@ -88,15 +85,12 @@ void Microphone::readTaskEntry(void* arg) {
 
 void Microphone::_readLoop() {
 	int16_t buffer[256];
+	
 	while (_recording) {
 		size_t res = this->_readFromI2S(buffer, 256);
 		if (res == 0) {
 			continue;
 		}
-		// TODO(you): xStreamBufferSend с таймаутом молча дропнет сэмплы, если
-		// Recorder не успевает вычитывать буфер (SD подтормозила на записи).
-		// Реши сознательно: дропать (как сейчас), увеличивать таймаут,
-		// или как-то сигнализировать о переполнении наружу.
 		xStreamBufferSend(this->read_data, buffer, res * sizeof(int16_t), pdMS_TO_TICKS(100));
 	}
 	vTaskDelete(NULL);

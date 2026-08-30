@@ -32,8 +32,14 @@ class Memory {
         bool startFile(const char* filename, uint32_t sample_rate, uint16_t bits_per_sample, uint16_t channels);
         void writeSamples(const int16_t* data, size_t count);
         void stopFile();
+        bool isWritingFailed();
 
     private:
+        // Собирает заголовок из текущих _sample_rate/_bits_per_sample/_channels/_data_bytes.
+        // Единая точка правды для startFile() (заглушка с data_bytes=0) и stopFile()
+        // (финальные размеры), чтобы теги/константы не дублировались в двух местах.
+        WavHeader _buildHeader();
+
         gpio_num_t chip_select_pin;
         gpio_num_t clock_pin;
         gpio_num_t miso_pin;
@@ -41,8 +47,9 @@ class Memory {
 
         sdmmc_card_t* _card;
         FILE* _file;
-        uint32_t _data_bytes;      // сколько байт PCM уже записано в текущий файл
+        uint32_t _data_bytes;
         uint32_t _sample_rate;
         uint16_t _bits_per_sample;
         uint16_t _channels;
+        bool _writingFailed;
 };

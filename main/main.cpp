@@ -13,8 +13,8 @@
 
 #define SD_CS_PIN GPIO_NUM_27
 #define SD_CLK_PIN GPIO_NUM_14
-#define SD_MOSI_PIN GPIO_NUM_13
 #define SD_MISO_PIN GPIO_NUM_22
+#define SD_MOSI_PIN GPIO_NUM_23
 
 extern "C" void app_main(void)
 {
@@ -26,6 +26,10 @@ extern "C" void app_main(void)
 	mic.init();
 
 	Memory memory = Memory(SD_CS_PIN, SD_CLK_PIN, SD_MOSI_PIN, SD_MISO_PIN);
+	bool memory_ready = memory.init();
+	if (!memory_ready) {
+		printf("Memory::init failed, SD card is not mounted\n");
+	}
 
 	Recorder rec = Recorder(&mic, &memory, RECORD_BUTTON_PIN);
 	rec.init();
