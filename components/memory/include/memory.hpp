@@ -5,8 +5,6 @@
 #include <cstdint>
 #include <cstdio>
 
-// TODO(you): заполнить значения полей в startFile()/stopFile() (chunk_size и
-// data_size известны только когда дозаписали все сэмплы, отсюда и stopFile).
 struct WavHeader {
     char riff_tag[4];      // "RIFF"
     uint32_t chunk_size;   // 36 + data_size, известен только в stopFile()
@@ -30,14 +28,12 @@ class Memory {
 
         bool init();
         bool startFile(const char* filename, uint32_t sample_rate, uint16_t bits_per_sample, uint16_t channels);
+        int findNextIndex(const char* prefix, const char* ext);
         void writeSamples(const int16_t* data, size_t count);
         void stopFile();
         bool isWritingFailed();
 
     private:
-        // Собирает заголовок из текущих _sample_rate/_bits_per_sample/_channels/_data_bytes.
-        // Единая точка правды для startFile() (заглушка с data_bytes=0) и stopFile()
-        // (финальные размеры), чтобы теги/константы не дублировались в двух местах.
         WavHeader _buildHeader();
 
         gpio_num_t chip_select_pin;

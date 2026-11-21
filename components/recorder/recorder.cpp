@@ -11,6 +11,9 @@
 #define RECORDING_SAMPLE_RATE 44100
 #define RECORDING_BITS_PER_SAMPLE 16
 #define RECORDING_CHANNELS 1
+#define RECORDING_PREFIX "record_"
+#define RECORDING_EXT ".wav"
+#define MAX_NAME_ATTEMPTS 16
 
 Recorder::Recorder(Microphone* microphone, Memory* memory, gpio_num_t button_pin) {
 	this->_microphone = microphone;
@@ -31,6 +34,11 @@ void Recorder::init() {
     };
     esp_err_t err = gpio_config(&io_conf);
     printf("gpio_config: %s\n", esp_err_to_name(err));
+
+    int next = _memory->findNextIndex(RECORDING_PREFIX, RECORDING_EXT);
+    _recording_count = (next < 0) ? 0 : next;
+
+    printf("recorder: next recording index = %d\n", _recording_count);
 
     xTaskCreate(&Recorder::taskEntry, "recorder_task", 4096, this, 10, &_task_handle);
 
@@ -72,17 +80,24 @@ void Recorder::onInterrupt() {
 }
 
 void Recorder::startRecording() {
-    char fileName[32];
-    snprintf(fileName, sizeof(fileName), "record_%d.wav", this->_recording_count);
+	char fileName[32];
+	bool started = false;
 
-	_microphone->start_record();
-	_isRecording = true;
-	bool started = _memory->startFile(fileName, RECORDING_SAMPLE_RATE, RECORDING_BITS_PER_SAMPLE, RECORDING_CHANNELS);
+	for (int attempt = 0; attempt < MAX_NAME_ATTEMPTS && !started; attempt++) {
+		snprintf(fileName, sizeof(fileName), RECORDING_PREFIX "%d" RECORDING_EXT, this->_recording_count);
+		started = _memory->startFile(fileName, RECORDING_SAMPLE_RATE, RECORDING_BITS_PER_SAMPLE, RECORDING_CHANNELS);
+		this->_recording_count++;
+	}
 
 	if (!started) {
-	    printf("Bad file writing start\n");
+		printf("Bad file writing start\n");
 		return;
 	}
+
+	printf("recording to %s\n", fileName);
+
+	_isRecording = true;
+	_microphone->start_record();
 
 	xTaskCreate(&Recorder::pumpTaskEntry, "recorder_pump", 4096, this, 5, &_pump_task_handle);
 }
@@ -97,8 +112,6 @@ void Recorder::pumpTaskEntry(void* arg) {
 }
 
 void Recorder::pumpLoop() {
-    this->_recording_count++;
-    
     const size_t N = 256;
     int16_t buffer[N];
     
@@ -121,6 +134,7 @@ bool Recorder::pump(int16_t* buffer, size_t n) {
 
     if (read > 0) {
         _memory->writeSamples(buffer, read);
+        
         if (_memory->isWritingFailed()) {
             _isRecording = false;
             _memory->stopFile();

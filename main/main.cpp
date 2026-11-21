@@ -27,6 +27,7 @@ extern "C" void app_main(void)
 
 	Memory memory = Memory(SD_CS_PIN, SD_CLK_PIN, SD_MOSI_PIN, SD_MISO_PIN);
 	bool memory_ready = memory.init();
+	
 	if (!memory_ready) {
 		printf("Memory::init failed, SD card is not mounted\n");
 	}

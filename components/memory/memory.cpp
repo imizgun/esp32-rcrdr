@@ -8,8 +8,13 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
+#include <sys/stat.h>
 
 char BASE_PATH[] = "/sdcard";
+
+// Потолок для линейного поиска свободного индекса, чтобы при повреждённой
+// файловой системе не крутиться бесконечно.
+#define MAX_RECORDINGS 10000
 
 Memory::Memory(gpio_num_t cs, gpio_num_t clk, gpio_num_t mosi, gpio_num_t miso) {
     this->chip_select_pin = cs;
@@ -57,27 +62,22 @@ bool Memory::init() {
     return err == ESP_OK;
 }
 
-bool Memory::startFile(const char* filename, uint32_t sample_rate, uint16_t bits_per_sample, uint16_t channels) {
-    this->_writingFailed = false;
-    
-    char fullPath[64];
-    snprintf(fullPath, sizeof(fullPath), "%s/%s", BASE_PATH, filename);
-
-    _file = fopen(fullPath, "wb");
-
-    if (_file == nullptr) {
-        return false;
+int Memory::findNextIndex(const char* prefix, const char* ext) {
+    if (_card == nullptr) {
+        return -1;
     }
 
-    _sample_rate = sample_rate;
-    _bits_per_sample = bits_per_sample;
-    _channels = channels;
-    _data_bytes = 0;
+    char fullPath[64];
+    struct stat st;
 
-    WavHeader header = _buildHeader();
-    fwrite(&header, sizeof(WavHeader), 1, _file);
+    for (int i = 0; i < MAX_RECORDINGS; i++) {
+        snprintf(fullPath, sizeof(fullPath), "%s/%s%d%s", BASE_PATH, prefix, i, ext);
+        if (stat(fullPath, &st) != 0) {
+            return i;
+        }
+    }
 
-    return true;
+    return MAX_RECORDINGS;
 }
 
 WavHeader Memory::_buildHeader() {
@@ -96,6 +96,31 @@ WavHeader Memory::_buildHeader() {
     header.chunk_size = 36 + _data_bytes;
     header.data_size = _data_bytes;
     return header;
+}
+
+bool Memory::startFile(const char* filename, uint32_t sample_rate, uint16_t bits_per_sample, uint16_t channels) {
+    this->_writingFailed = false;
+    
+    char fullPath[64];
+    snprintf(fullPath, sizeof(fullPath), "%s/%s", BASE_PATH, filename);
+
+    // "x" => O_EXCL: существующий файл не будет затёрт, fopen вернёт nullptr.
+    // Это страховка на случай, если счётчик записей разошёлся с содержимым карты.
+    _file = fopen(fullPath, "wbx");
+
+    if (_file == nullptr) {
+        return false;
+    }
+
+    _sample_rate = sample_rate;
+    _bits_per_sample = bits_per_sample;
+    _channels = channels;
+    _data_bytes = 0;
+
+    WavHeader header = _buildHeader();
+    fwrite(&header, sizeof(WavHeader), 1, _file);
+
+    return true;
 }
 
 void Memory::writeSamples(const int16_t* data, size_t count) {
